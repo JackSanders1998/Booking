@@ -1,0 +1,33 @@
+GET http://localhost:3000/venues
+
+###
+GET http://localhost:3000/venues?offset=1&limit=2
+
+###
+# @name newVenue
+POST http://localhost:3000/venues
+Content-Type: application/json
+
+{
+    "title": "Chicago Music",
+    "description": "This is a music venue in Chicago!",
+    "address": "Chicago, IL",
+    "published": false
+}
+
+###
+@addedVenueId={{newVenue.response.body.$.id}}
+GET http://localhost:3000/venues/{{addedVenueId}}
+
+###
+@addedVenueId={{newVenue.response.body.$.id}}
+PATCH http://localhost:3000/venues/{{addedVenueId}}
+Content-Type: application/json
+
+{
+    "published": true
+}
+
+###
+@addedVenueId={{newVenue.response.body.$.id}}
+DELETE http://localhost:3000/venues/{{addedVenueId}}
