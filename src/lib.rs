@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use utoipa::IntoParams;
 use std::{
     collections::HashMap,
     sync::atomic::{AtomicUsize, Ordering},
@@ -8,7 +9,7 @@ use std::{
 use tokio::fs;
 
 /// Represents a single venue item
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, IntoParams)]
 pub struct VenueItem {
     pub title: String,
     pub description: String,

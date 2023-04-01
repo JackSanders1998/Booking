@@ -6,12 +6,15 @@ use axum::{
     Json, Router,
 };
 use booking::{Pagination, UpdateVenueItem, VenueItem, VenueStore, VenueStoreError};
+use serde::Deserialize;
 use serde_json::json;
 use std::{net::SocketAddr, sync::Arc};
 use tokio::sync::RwLock;
 use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use utoipa_swagger_ui::SwaggerUi;
+use utoipa::{OpenApi, IntoParams};
 
 /// Type for our shared state
 ///
@@ -21,6 +24,28 @@ type Db = Arc<RwLock<VenueStore>>;
 
 #[tokio::main]
 async fn main() {
+    #[derive(OpenApi)]
+    #[openapi(
+        paths(
+            get_venues,
+            get_venue,
+            add_venue,
+        ),
+        tags(
+            (name = "venue", description = "APIs for the venues table")
+        )
+    )]
+    struct ApiDoc;
+
+    /// Venue post body
+    #[derive(Deserialize, IntoParams)]
+    pub struct PostVenueBody {
+        pub title: String,
+        pub description: String,
+        pub address: String,
+        pub published: bool,
+    }
+
     // Enable tracing using Tokio's https://tokio.rs/#tk-lib-tracing
     tracing_subscriber::registry()
         .with(tracing_subscriber::EnvFilter::new(
@@ -36,6 +61,8 @@ async fn main() {
     // Note that this will change in Axum 0.6. See more at
     // https://docs.rs/axum/0.6.0-rc.4/axum/index.html#sharing-state-with-handlers
     let app = Router::new()
+        .merge(SwaggerUi::new("/swagger")
+        .url("/api-docs/openapi.json", ApiDoc::openapi()))
         // Here we setup the routes. Note: No macros
         .route("/venues", get(get_venues).post(add_venue))
         .route("/venues/:id", delete(delete_venue).patch(update_venue).get(get_venue))
@@ -51,12 +78,14 @@ async fn main() {
     axum::Server::bind(&addr).serve(app.into_make_service()).await.unwrap();
 }
 
-/// Get list of venue items
-///
-/// Note how the Query extractor is used to get query parameters. Note how the State
-/// extractor is used to get the database (changes in Axum 0.6 RC).
-/// Extractors are technically types that implement FromRequest. You can create
-/// your own extractors or use the ones provided by Axum.
+#[utoipa::path(
+    get,
+    path = "/venues",
+    responses(
+        (status = 200, description = "List all venues successfully")
+    )
+)]
+/// Get an array of venue items
 async fn get_venues(pagination: Option<Query<Pagination>>, State(db): State<Db>) -> impl IntoResponse {
     let venues = db.read().await;
     let Query(pagination) = pagination.unwrap_or_default();
@@ -64,9 +93,14 @@ async fn get_venues(pagination: Option<Query<Pagination>>, State(db): State<Db>)
     Json(venues.get_venues(pagination))
 }
 
+#[utoipa::path(
+    get,
+    path = "/venues/{id}",
+    responses(
+        (status = 200, description = "Get venue by ID")
+    )
+)]
 /// Get a single venue item
-///
-/// Note how the Path extractor is used to get query parameters.
 async fn get_venue(Path(id): Path<usize>, State(db): State<Db>) -> impl IntoResponse {
     let venues = db.read().await;
     if let Some(item) = venues.get_venue(id) {
@@ -78,10 +112,16 @@ async fn get_venue(Path(id): Path<usize>, State(db): State<Db>) -> impl IntoResp
     }
 }
 
+#[utoipa::path(
+    post,
+    path = "/venue",
+    request_body = booking::PostVenueBody,
+    responses(
+        (status = 201, description = "Venue item created successfully", body = booking::PostVenueBody),
+        (status = 409, description = "Venue already exists")
+    )
+)]
 /// Add a new venue item
-///
-/// Note that this time, Json is used as an extractor. This means that the request body
-/// will be deserialized into a VenueItem.
 async fn add_venue(State(db): State<Db>, Json(venue): Json<VenueItem>) -> impl IntoResponse {
     let mut venues = db.write().await;
     let venue = venues.add_venue(venue);
