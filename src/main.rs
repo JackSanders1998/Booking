@@ -5,7 +5,7 @@ use axum::{
     routing::{delete, get},
     Json, Router,
 };
-use booking::{Pagination, UpdateVenueItem, VenueItem, VenueStore, VenueStoreError};
+use booking::{Pagination, UpdateVenue, Venue, VenueStore, VenueStoreError};
 use serde::Deserialize;
 use serde_json::json;
 use std::{net::SocketAddr, sync::Arc};
@@ -85,7 +85,7 @@ async fn main() {
         (status = 200, description = "List all venues successfully")
     )
 )]
-/// Get an array of venue items
+/// Get an array of venue
 async fn get_venues(pagination: Option<Query<Pagination>>, State(db): State<Db>) -> impl IntoResponse {
     let venues = db.read().await;
     let Query(pagination) = pagination.unwrap_or_default();
@@ -100,7 +100,7 @@ async fn get_venues(pagination: Option<Query<Pagination>>, State(db): State<Db>)
         (status = 200, description = "Get venue by ID")
     )
 )]
-/// Get a single venue item
+/// Get a single venue
 async fn get_venue(Path(id): Path<usize>, State(db): State<Db>) -> impl IntoResponse {
     let venues = db.read().await;
     if let Some(item) = venues.get_venue(id) {
@@ -121,8 +121,8 @@ async fn get_venue(Path(id): Path<usize>, State(db): State<Db>) -> impl IntoResp
         (status = 409, description = "Venue already exists")
     )
 )]
-/// Add a new venue item
-async fn add_venue(State(db): State<Db>, Json(venue): Json<VenueItem>) -> impl IntoResponse {
+/// Add a new venue
+async fn add_venue(State(db): State<Db>, Json(venue): Json<Venue>) -> impl IntoResponse {
     let mut venues = db.write().await;
     let venue = venues.add_venue(venue);
     (StatusCode::CREATED, Json(venue))
@@ -141,7 +141,7 @@ async fn delete_venue(Path(id): Path<usize>, State(db): State<Db>) -> impl IntoR
 async fn update_venue(
     Path(id): Path<usize>,
     State(db): State<Db>,
-    Json(input): Json<UpdateVenueItem>,
+    Json(input): Json<UpdateVenue>,
 ) -> Result<impl IntoResponse, StatusCode> {
     let mut venues = db.write().await;
     let res = venues.update_venue(&id, input);

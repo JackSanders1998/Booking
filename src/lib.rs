@@ -8,42 +8,40 @@ use std::{
 #[cfg(feature = "persist")]
 use tokio::fs;
 
-/// Represents a single venue item
+/// Represents a single venue
 #[derive(Serialize, Deserialize, Debug, Clone, IntoParams)]
-pub struct VenueItem {
+pub struct Venue {
     pub title: String,
     pub description: String,
     pub address: String,
     pub published: bool,
 }
 
-/// DTO for patching a venue item
+/// DTO for patching a venue
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct UpdateVenueItem {
+pub struct UpdateVenue {
     pub title: Option<String>,
     pub description: Option<String>,
     pub address: Option<String>,
     pub published: Option<bool>,
 }
 
-/// Represents a venue item with an id
+/// Represents a venue with an id
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct IdentifiableVenueItem {
+pub struct IdentifiableVenue {
     pub id: usize,
 
     #[serde(flatten)]
-    pub item: VenueItem,
+    pub item: Venue,
 }
 
-impl IdentifiableVenueItem {
-    pub fn new(id: usize, item: VenueItem) -> IdentifiableVenueItem {
-        IdentifiableVenueItem { id, item }
+impl IdentifiableVenue {
+    pub fn new(id: usize, item: Venue) -> IdentifiableVenue {
+        IdentifiableVenue { id, item }
     }
 }
 
 /// Parameters for pagination
-///
-/// Used to demonstrate handling of query parameters.
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct Pagination {
     pub offset: Option<usize>,
@@ -55,7 +53,7 @@ impl Pagination {
     }
 }
 
-/// Error type for the venue items store
+/// Error type for the venue store
 #[derive(thiserror::Error, Debug)]
 pub enum VenueStoreError {
     #[error("persistent data store error")]
@@ -64,22 +62,20 @@ pub enum VenueStoreError {
     SerializationError(#[from] serde_json::error::Error),
 }
 
-/// Venue items store
+/// Venue store
 #[derive(Default)]
 pub struct VenueStore {
-    store: HashMap<usize, IdentifiableVenueItem>,
+    store: HashMap<usize, IdentifiableVenue>,
     id_generator: AtomicUsize,
 }
 impl VenueStore {
-    pub fn from_hashmap(store: HashMap<usize, IdentifiableVenueItem>) -> Self {
+    pub fn from_hashmap(store: HashMap<usize, IdentifiableVenue>) -> Self {
         let id_generator = AtomicUsize::new(store.keys().max().map(|v| v + 1).unwrap_or(0));
         VenueStore { store, id_generator }
     }
 
-    /// Get list of venue items
-    ///
-    /// Supports pagination.
-    pub fn get_venues(&self, pagination: Pagination) -> Vec<IdentifiableVenueItem> {
+    /// Get list of venues with pagination support
+    pub fn get_venues(&self, pagination: Pagination) -> Vec<IdentifiableVenue> {
         self.store
             .values()
             .skip(pagination.offset.unwrap_or(0))
@@ -88,26 +84,26 @@ impl VenueStore {
             .collect::<Vec<_>>()
     }
 
-    /// Get a single venue item by id
-    pub fn get_venue(&self, id: usize) -> Option<&IdentifiableVenueItem> {
+    /// Get a single venue by id
+    pub fn get_venue(&self, id: usize) -> Option<&IdentifiableVenue> {
         self.store.get(&id)
     }
 
-    /// Create a new venue item
-    pub fn add_venue(&mut self, venue: VenueItem) -> IdentifiableVenueItem {
+    /// Create a new venue
+    pub fn add_venue(&mut self, venue: Venue) -> IdentifiableVenue {
         let id = self.id_generator.fetch_add(1, Ordering::Relaxed);
-        let new_item = IdentifiableVenueItem::new(id, venue);
+        let new_item = IdentifiableVenue::new(id, venue);
         self.store.insert(id, new_item.clone());
         new_item
     }
 
-    /// Remove a venue item by id
-    pub fn remove_venue(&mut self, id: usize) -> Option<IdentifiableVenueItem> {
+    /// Remove a venue by id
+    pub fn remove_venue(&mut self, id: usize) -> Option<IdentifiableVenue> {
         self.store.remove(&id)
     }
 
-    /// Patch a venue item by id
-    pub fn update_venue(&mut self, id: &usize, venue: UpdateVenueItem) -> Option<&IdentifiableVenueItem> {
+    /// Patch a venue by id
+    pub fn update_venue(&mut self, id: &usize, venue: UpdateVenue) -> Option<&IdentifiableVenue> {
         if let Some(item) = self.store.get_mut(id) {
             if let Some(title) = venue.title {
                 item.item.title = title;
@@ -129,7 +125,7 @@ impl VenueStore {
     }
 }
 
-impl From<VenueStore> for HashMap<usize, IdentifiableVenueItem> {
+impl From<VenueStore> for HashMap<usize, IdentifiableVenue> {
     fn from(value: VenueStore) -> Self {
         value.store
     }
