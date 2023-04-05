@@ -6,7 +6,6 @@ use axum::{
     Json, Router,
 };
 use booking::{Pagination, UpdateVenue, Venue, VenueStore, VenueStoreError};
-use serde::Deserialize;
 use serde_json::json;
 use std::{net::SocketAddr, sync::Arc};
 use tokio::sync::RwLock;
@@ -14,7 +13,7 @@ use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use utoipa_swagger_ui::SwaggerUi;
-use utoipa::{OpenApi, IntoParams};
+use utoipa::{OpenApi};
 
 /// Type for our shared state
 ///
@@ -30,21 +29,14 @@ async fn main() {
             get_venues,
             get_venue,
             add_venue,
+            delete_venue,
+            update_venue,
         ),
         tags(
             (name = "venue", description = "APIs for the venues table")
         )
     )]
     struct ApiDoc;
-
-    /// Venue post body
-    #[derive(Deserialize, IntoParams)]
-    pub struct PostVenueBody {
-        pub title: String,
-        pub description: String,
-        pub address: String,
-        pub published: bool,
-    }
 
     // Enable tracing using Tokio's https://tokio.rs/#tk-lib-tracing
     tracing_subscriber::registry()
@@ -64,8 +56,8 @@ async fn main() {
         .merge(SwaggerUi::new("/swagger")
         .url("/api-docs/openapi.json", ApiDoc::openapi()))
         // Here we setup the routes. Note: No macros
-        .route("/venues", get(get_venues).post(add_venue))
-        .route("/venues/:id", delete(delete_venue).patch(update_venue).get(get_venue))
+        .route("/venue", get(get_venues).post(add_venue))
+        .route("/venue/:id", delete(delete_venue).patch(update_venue).get(get_venue))
         .with_state(db)
         // Using tower to add tracing layer
         .layer(ServiceBuilder::new().layer(TraceLayer::new_for_http()).into_inner());
@@ -80,12 +72,12 @@ async fn main() {
 
 #[utoipa::path(
     get,
-    path = "/venues",
+    path = "/venue",
     responses(
         (status = 200, description = "List all venues successfully")
     )
 )]
-/// Get an array of venue
+/// Get an array of venues
 async fn get_venues(pagination: Option<Query<Pagination>>, State(db): State<Db>) -> impl IntoResponse {
     let venues = db.read().await;
     let Query(pagination) = pagination.unwrap_or_default();
@@ -95,10 +87,13 @@ async fn get_venues(pagination: Option<Query<Pagination>>, State(db): State<Db>)
 
 #[utoipa::path(
     get,
-    path = "/venues/{id}",
+    path = "/venue/{id}",
     responses(
         (status = 200, description = "Get venue by ID")
-    )
+    ),
+    params(
+        ("id" = i32, Path, description = "Venue database id")
+    ),
 )]
 /// Get a single venue
 async fn get_venue(Path(id): Path<usize>, State(db): State<Db>) -> impl IntoResponse {
@@ -115,19 +110,27 @@ async fn get_venue(Path(id): Path<usize>, State(db): State<Db>) -> impl IntoResp
 #[utoipa::path(
     post,
     path = "/venue",
-    request_body = booking::PostVenueBody,
-    responses(
-        (status = 201, description = "Venue item created successfully", body = booking::PostVenueBody),
-        (status = 409, description = "Venue already exists")
-    )
+    request_body = Venue,
 )]
 /// Add a new venue
 async fn add_venue(State(db): State<Db>, Json(venue): Json<Venue>) -> impl IntoResponse {
+    println!("Adding venue: {:?}", venue);
     let mut venues = db.write().await;
     let venue = venues.add_venue(venue);
     (StatusCode::CREATED, Json(venue))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/venue/{id}",
+    responses(
+        (status = 200, description = "Venue delete successfully"),
+        (status = 404, description = "Venue not found")
+    ),
+    params(
+        ("id" = i32, Path, description = "Venue database id")
+    ),
+)]
 /// Delete a venue
 async fn delete_venue(Path(id): Path<usize>, State(db): State<Db>) -> impl IntoResponse {
     if db.write().await.remove_venue(id).is_some() {
@@ -137,6 +140,18 @@ async fn delete_venue(Path(id): Path<usize>, State(db): State<Db>) -> impl IntoR
     }
 }
 
+#[utoipa::path(
+    patch,
+    path = "/venue/{id}",
+    request_body = UpdateVenue,
+    responses(
+        (status = 200, description = "Venue updated successfully"),
+        (status = 404, description = "Venue not found")
+    ),
+    params(
+        ("id" = i32, Path, description = "Venue database id")
+    ),
+)]
 /// Update a venue
 async fn update_venue(
     Path(id): Path<usize>,

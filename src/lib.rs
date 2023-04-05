@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use utoipa::IntoParams;
+use utoipa::{IntoParams, ToSchema};
 use std::{
     collections::HashMap,
     sync::atomic::{AtomicUsize, Ordering},
@@ -7,9 +7,10 @@ use std::{
 
 #[cfg(feature = "persist")]
 use tokio::fs;
+use tracing::info;
 
 /// Represents a single venue
-#[derive(Serialize, Deserialize, Debug, Clone, IntoParams)]
+#[derive(Serialize, Deserialize, Debug, Clone, IntoParams, ToSchema)]
 pub struct Venue {
     pub title: String,
     pub description: String,
@@ -91,6 +92,7 @@ impl VenueStore {
 
     /// Create a new venue
     pub fn add_venue(&mut self, venue: Venue) -> IdentifiableVenue {
+        info!("Adding new venue: {:?}", venue);
         let id = self.id_generator.fetch_add(1, Ordering::Relaxed);
         let new_item = IdentifiableVenue::new(id, venue);
         self.store.insert(id, new_item.clone());
