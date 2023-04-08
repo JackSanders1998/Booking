@@ -15,7 +15,10 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use utoipa_swagger_ui::SwaggerUi;
 use utoipa::{OpenApi};
 use futures::executor::block_on;
-use sea_orm::{ConnectionTrait, Database, DbBackend, DbErr, Statement};
+use sea_orm::*;
+use entities::{prelude::*, *};
+
+mod entities;
 
 /// Type for our shared state
 ///
@@ -23,11 +26,12 @@ use sea_orm::{ConnectionTrait, Database, DbBackend, DbErr, Statement};
 /// between concurrently running web requests, we need to make it thread-safe.
 type Db = Arc<RwLock<VenueStore>>;
 const DATABASE_URL: &str = "mysql://root@localhost:3306";
-const DB_NAME: &str = "venues";
+const DB_NAME: &str = "booking_db";
 
 async fn run() -> Result<(), DbErr> {
     let db = Database::connect(DATABASE_URL).await?;
 
+    // dp agnostic setup for now...might just delete postgres and sqlite
     let db = &match db.get_database_backend() {
         DbBackend::MySql => {
             db.execute(Statement::from_string(
