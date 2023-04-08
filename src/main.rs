@@ -61,6 +61,14 @@ async fn run() -> Result<(), DbErr> {
         DbBackend::Sqlite => db,
     };
 
+    let chicago_venue = venue::ActiveModel {
+        name: ActiveValue::Set("chicago-venue".to_owned()),
+        description: ActiveValue::Set("A Chicago Venue".to_owned()),
+        address: ActiveValue::Set("123 Main st.".to_owned()),
+        ..Default::default()
+    };
+    let res = VenueSeaOrm::insert(chicago_venue).exec(db).await?;
+
     Ok(())
 }
 
