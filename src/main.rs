@@ -14,29 +14,72 @@ use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use utoipa_swagger_ui::SwaggerUi;
 use utoipa::{OpenApi};
+use futures::executor::block_on;
+use sea_orm::{ConnectionTrait, Database, DbBackend, DbErr, Statement};
 
 /// Type for our shared state
 ///
 /// In our sample application, we store the venue list in memory. As the state is shared
 /// between concurrently running web requests, we need to make it thread-safe.
 type Db = Arc<RwLock<VenueStore>>;
+const DATABASE_URL: &str = "mysql://root@localhost:3306";
+const DB_NAME: &str = "venues";
+
+async fn run() -> Result<(), DbErr> {
+    let db = Database::connect(DATABASE_URL).await?;
+
+    let db = &match db.get_database_backend() {
+        DbBackend::MySql => {
+            db.execute(Statement::from_string(
+                db.get_database_backend(),
+                format!("CREATE DATABASE IF NOT EXISTS `{}`;", DB_NAME),
+            ))
+                .await?;
+
+            let url = format!("{}/{}", DATABASE_URL, DB_NAME);
+            Database::connect(&url).await?
+        }
+        DbBackend::Postgres => {
+            db.execute(Statement::from_string(
+                db.get_database_backend(),
+                format!("DROP DATABASE IF EXISTS \"{}\";", DB_NAME),
+            ))
+                .await?;
+            db.execute(Statement::from_string(
+                db.get_database_backend(),
+                format!("CREATE DATABASE \"{}\";", DB_NAME),
+            ))
+                .await?;
+
+            let url = format!("{}/{}", DATABASE_URL, DB_NAME);
+            Database::connect(&url).await?
+        }
+        DbBackend::Sqlite => db,
+    };
+
+    Ok(())
+}
 
 #[tokio::main]
 async fn main() {
     #[derive(OpenApi)]
     #[openapi(
-        paths(
-            get_venues,
-            get_venue,
-            add_venue,
-            delete_venue,
-            update_venue,
-        ),
-        tags(
-            (name = "venue", description = "APIs for the venues table")
-        )
+    paths(
+    get_venues,
+    get_venue,
+    add_venue,
+    delete_venue,
+    update_venue,
+    ),
+    tags(
+    (name = "venue", description = "APIs for the venues table")
+    )
     )]
     struct ApiDoc;
+
+    if let Err(err) = block_on(run()) {
+        panic!("{}", err);
+    }
 
     // Enable tracing using Tokio's https://tokio.rs/#tk-lib-tracing
     tracing_subscriber::registry()
@@ -54,7 +97,7 @@ async fn main() {
     // https://docs.rs/axum/0.6.0-rc.4/axum/index.html#sharing-state-with-handlers
     let app = Router::new()
         .merge(SwaggerUi::new("/swagger")
-        .url("/api-docs/openapi.json", ApiDoc::openapi()))
+            .url("/api-docs/openapi.json", ApiDoc::openapi()))
         // Here we setup the routes. Note: No macros
         .route("/venue", get(get_venues).post(add_venue))
         .route("/venue/:id", delete(delete_venue).patch(update_venue).get(get_venue))
@@ -71,11 +114,11 @@ async fn main() {
 }
 
 #[utoipa::path(
-    get,
-    path = "/venue",
-    responses(
-        (status = 200, description = "List all venues successfully")
-    )
+get,
+path = "/venue",
+responses(
+(status = 200, description = "List all venues successfully")
+)
 )]
 /// Get an array of venues
 async fn get_venues(pagination: Option<Query<Pagination>>, State(db): State<Db>) -> impl IntoResponse {
@@ -86,14 +129,14 @@ async fn get_venues(pagination: Option<Query<Pagination>>, State(db): State<Db>)
 }
 
 #[utoipa::path(
-    get,
-    path = "/venue/{id}",
-    responses(
-        (status = 200, description = "Get venue by ID")
-    ),
-    params(
-        ("id" = i32, Path, description = "Venue database id")
-    ),
+get,
+path = "/venue/{id}",
+responses(
+(status = 200, description = "Get venue by ID")
+),
+params(
+("id" = i32, Path, description = "Venue database id")
+),
 )]
 /// Get a single venue
 async fn get_venue(Path(id): Path<usize>, State(db): State<Db>) -> impl IntoResponse {
@@ -108,9 +151,9 @@ async fn get_venue(Path(id): Path<usize>, State(db): State<Db>) -> impl IntoResp
 }
 
 #[utoipa::path(
-    post,
-    path = "/venue",
-    request_body = Venue,
+post,
+path = "/venue",
+request_body = Venue,
 )]
 /// Add a new venue
 async fn add_venue(State(db): State<Db>, Json(venue): Json<Venue>) -> impl IntoResponse {
@@ -121,15 +164,15 @@ async fn add_venue(State(db): State<Db>, Json(venue): Json<Venue>) -> impl IntoR
 }
 
 #[utoipa::path(
-    delete,
-    path = "/venue/{id}",
-    responses(
-        (status = 200, description = "Venue delete successfully"),
-        (status = 404, description = "Venue not found")
-    ),
-    params(
-        ("id" = i32, Path, description = "Venue database id")
-    ),
+delete,
+path = "/venue/{id}",
+responses(
+(status = 200, description = "Venue delete successfully"),
+(status = 404, description = "Venue not found")
+),
+params(
+("id" = i32, Path, description = "Venue database id")
+),
 )]
 /// Delete a venue
 async fn delete_venue(Path(id): Path<usize>, State(db): State<Db>) -> impl IntoResponse {
@@ -141,16 +184,16 @@ async fn delete_venue(Path(id): Path<usize>, State(db): State<Db>) -> impl IntoR
 }
 
 #[utoipa::path(
-    patch,
-    path = "/venue/{id}",
-    request_body = UpdateVenue,
-    responses(
-        (status = 200, description = "Venue updated successfully"),
-        (status = 404, description = "Venue not found")
-    ),
-    params(
-        ("id" = i32, Path, description = "Venue database id")
-    ),
+patch,
+path = "/venue/{id}",
+request_body = UpdateVenue,
+responses(
+(status = 200, description = "Venue updated successfully"),
+(status = 404, description = "Venue not found")
+),
+params(
+("id" = i32, Path, description = "Venue database id")
+),
 )]
 /// Update a venue
 async fn update_venue(
