@@ -1,5 +1,5 @@
-use crate::queries::task_queries::{find_task_by_id, save_active_task};
-use crate::{database::users::Model, utilities::app_error::AppError};
+use crate::queries::venue_queries::{find_venue_by_id, save_active_venue};
+use crate::{utilities::app_error::AppError};
 use axum::{
     extract::{Path, State},
     Extension,
@@ -7,20 +7,19 @@ use axum::{
 use chrono::Utc;
 use sea_orm::{DatabaseConnection, IntoActiveModel, Set};
 
-pub async fn soft_delete_task(
-    Extension(user): Extension<Model>,
+pub async fn soft_delete_venue(
     State(db): State<DatabaseConnection>,
-    Path(task_id): Path<i32>,
+    Path(venue_id): Path<i32>,
 ) -> Result<(), AppError> {
-    let mut task = find_task_by_id(&db, task_id, user.id)
+    let mut venue = find_venue_by_id(&db, venue_id)
         .await?
         .into_active_model();
 
     let now = Utc::now();
 
-    task.deleted_at = Set(Some(now.into()));
+    venue.deleted_at = Set(Some(now.into()));
 
-    save_active_task(&db, task).await?;
+    save_active_venue(&db, venue).await?;
 
     Ok(())
 }

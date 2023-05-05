@@ -1,15 +1,15 @@
-pub mod create_task;
-pub mod create_task_extractor;
-pub mod delete_task;
-pub mod get_all_tasks;
-pub mod get_one_task;
-pub mod update_tasks;
+pub mod create_venue;
+pub mod create_venue_extractor;
+pub mod delete_venue;
+pub mod get_all_venues;
+pub mod get_one_venue;
+pub mod update_venues;
 
 use chrono::{DateTime, FixedOffset};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
-pub struct RequestTask {
+pub struct RequestVenue {
     #[serde(
         default,                                    // <- important for deserialization
         skip_serializing_if = "Option::is_none",    // <- important for serialization
@@ -32,7 +32,7 @@ pub struct RequestTask {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct ResponseTask {
+pub struct ResponseVenue {
     pub id: i32,
     pub title: String,
     pub description: Option<String>,
@@ -41,11 +41,11 @@ pub struct ResponseTask {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct ResponseDataTask {
-    pub data: ResponseTask,
+pub struct ResponseDataVenue {
+    pub data: ResponseVenue,
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct ResponseDataTasks {
-    pub data: Vec<ResponseTask>,
+pub struct ResponseDataVenues {
+    pub data: Vec<ResponseVenue>,
 }

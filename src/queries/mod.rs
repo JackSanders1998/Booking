@@ -1,2 +1,2 @@
-pub mod task_queries;
-pub mod user_queries;
+pub mod venue_queries;
+pub mod timeslot_queries;

@@ -5,98 +5,98 @@ use sea_orm::{
 
 use crate::{
     database::{
-        tasks::{self, Entity as Tasks, Model as TaskModel},
+        venues::{self, Entity as Venues, Model as VenueModel},
         users::Model as UserModel,
     },
-    routes::tasks::create_task_extractor::ValidateCreateTask,
+    routes::venues::create_venue_extractor::ValidateCreateVenue,
     utilities::app_error::AppError,
 };
 
-pub async fn create_task(
-    task: ValidateCreateTask,
+pub async fn create_venue(
+    venue: ValidateCreateVenue,
     user: &UserModel,
     db: &DatabaseConnection,
-) -> Result<TaskModel, AppError> {
-    let new_task = tasks::ActiveModel {
-        priority: Set(task.priority),
-        title: Set(task.title.unwrap()),
-        description: Set(task.description),
+) -> Result<VenueModel, AppError> {
+    let new_venue = venues::ActiveModel {
+        priority: Set(venue.priority),
+        title: Set(venue.title.unwrap()),
+        description: Set(venue.description),
         user_id: Set(Some(user.id)),
         ..Default::default()
     };
 
-    save_active_task(db, new_task).await
+    save_active_venue(db, new_venue).await
 }
 
-pub async fn find_task_by_id(
+pub async fn find_venue_by_id(
     db: &DatabaseConnection,
     id: i32,
     user_id: i32,
-) -> Result<TaskModel, AppError> {
-    let task = Tasks::find_by_id(id)
-        .filter(tasks::Column::UserId.eq(Some(user_id)))
+) -> Result<VenueModel, AppError> {
+    let venue = Venues::find_by_id(id)
+        .filter(venues::Column::UserId.eq(Some(user_id)))
         .one(db)
         .await
         .map_err(|error| {
-            eprintln!("Error getting task by id: {:?}", error);
+            eprintln!("Error getting venue by id: {:?}", error);
             AppError::new(
                 StatusCode::INTERNAL_SERVER_ERROR,
-                "There was an error getting your task",
+                "There was an error getting your venue",
             )
         })?;
 
-    task.ok_or_else(|| {
-        eprintln!("Could not find task by id");
+    venue.ok_or_else(|| {
+        eprintln!("Could not find venue by id");
         AppError::new(StatusCode::NOT_FOUND, "not found")
     })
 }
 
-pub async fn save_active_task(
+pub async fn save_active_venue(
     db: &DatabaseConnection,
-    task: tasks::ActiveModel,
-) -> Result<TaskModel, AppError> {
-    let task = task.save(db).await.map_err(|error| {
-        eprintln!("Error saving task: {:?}", error);
-        AppError::new(StatusCode::INTERNAL_SERVER_ERROR, "Error saving task")
+    venue: venues::ActiveModel,
+) -> Result<VenueModel, AppError> {
+    let venue = venue.save(db).await.map_err(|error| {
+        eprintln!("Error saving venue: {:?}", error);
+        AppError::new(StatusCode::INTERNAL_SERVER_ERROR, "Error saving venue")
     })?;
 
-    convert_active_to_model(task)
+    convert_active_to_model(venue)
 }
 
-pub async fn get_all_tasks(
+pub async fn get_all_venues(
     db: &DatabaseConnection,
     user_id: i32,
     get_deleted: bool,
-) -> Result<Vec<TaskModel>, AppError> {
-    let mut query = Tasks::find().filter(tasks::Column::UserId.eq(Some(user_id)));
+) -> Result<Vec<VenueModel>, AppError> {
+    let mut query = Venues::find().filter(venues::Column::UserId.eq(Some(user_id)));
 
     if !get_deleted {
-        query = query.filter(tasks::Column::DeletedAt.is_null());
+        query = query.filter(venues::Column::DeletedAt.is_null());
     }
 
     query.all(db).await.map_err(|error| {
-        eprintln!("Error getting all tasks: {:?}", error);
-        AppError::new(StatusCode::INTERNAL_SERVER_ERROR, "Error getting all tasks")
+        eprintln!("Error getting all venues: {:?}", error);
+        AppError::new(StatusCode::INTERNAL_SERVER_ERROR, "Error getting all venues")
     })
 }
 
-pub async fn get_default_tasks(db: &DatabaseConnection) -> Result<Vec<TaskModel>, AppError> {
-    Tasks::find()
-        .filter(tasks::Column::IsDefault.eq(Some(true)))
+pub async fn get_default_venues(db: &DatabaseConnection) -> Result<Vec<VenueModel>, AppError> {
+    Venues::find()
+        .filter(venues::Column::IsDefault.eq(Some(true)))
         .all(db)
         .await
         .map_err(|error| {
-            eprintln!("Error getting default tasks: {:?}", error);
+            eprintln!("Error getting default venues: {:?}", error);
             AppError::new(
                 StatusCode::INTERNAL_SERVER_ERROR,
-                "Error getting default tasks",
+                "Error getting default venues",
             )
         })
 }
 
-fn convert_active_to_model(active_task: tasks::ActiveModel) -> Result<TaskModel, AppError> {
-    active_task.try_into_model().map_err(|error| {
-        eprintln!("Error converting task active model to model: {:?}", error);
+fn convert_active_to_model(active_venue: venues::ActiveModel) -> Result<VenueModel, AppError> {
+    active_venue.try_into_model().map_err(|error| {
+        eprintln!("Error converting venue active model to model: {:?}", error);
         AppError::new(StatusCode::INTERNAL_SERVER_ERROR, "Internal server error")
     })
 }

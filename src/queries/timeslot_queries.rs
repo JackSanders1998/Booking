@@ -1,67 +1,102 @@
-use crate::{
-    database::{
-        users::Model as UserModel,
-        users::{self, Entity as Users},
-    },
-    utilities::app_error::AppError,
-};
 use axum::http::StatusCode;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, TryIntoModel,
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set, TryIntoModel,
 };
 
-pub async fn save_active_user(
+use crate::{
+    database::{
+        timeslots::{self, Entity as Timeslots, Model as TimeslotModel},
+        users::Model as UserModel,
+    },
+    routes::timeslots::create_timeslot_extractor::ValidateCreateTimeslot,
+    utilities::app_error::AppError,
+};
+
+pub async fn create_timeslot(
+    timeslot: ValidateCreateTimeslot,
+    user: &UserModel,
     db: &DatabaseConnection,
-    user: users::ActiveModel,
-) -> Result<UserModel, AppError> {
-    let user = user.save(db).await.map_err(|error| {
-        let error_message = error.to_string();
+) -> Result<TimeslotModel, AppError> {
+    let new_timeslot = timeslots::ActiveModel {
+        priority: Set(timeslot.priority),
+        title: Set(timeslot.title.unwrap()),
+        description: Set(timeslot.description),
+        user_id: Set(Some(user.id)),
+        ..Default::default()
+    };
 
-        if error_message
-            .contains("duplicate key value violates unique constraint \"users_username_key\"")
-        {
-            AppError::new(
-                StatusCode::BAD_REQUEST,
-                "Username already taken, try again with a different user name",
-            )
-        } else {
-            eprintln!("Error creating user: {:?}", error_message);
-            AppError::new(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Something went wrong, please try again",
-            )
-        }
-    })?;
-
-    convert_active_to_model(user)
+    save_active_timeslot(db, new_timeslot).await
 }
 
-pub async fn find_by_username(
+pub async fn find_timeslot_by_id(
     db: &DatabaseConnection,
-    username: String,
-) -> Result<UserModel, AppError> {
-    Users::find()
-        .filter(users::Column::Username.eq(username))
+    id: i32,
+    user_id: i32,
+) -> Result<TimeslotModel, AppError> {
+    let timeslot = Timeslots::find_by_id(id)
+        .filter(timeslots::Column::UserId.eq(Some(user_id)))
         .one(db)
         .await
         .map_err(|error| {
-            eprintln!("Error getting user by username: {:?}", error);
+            eprintln!("Error getting timeslot by id: {:?}", error);
             AppError::new(
                 StatusCode::INTERNAL_SERVER_ERROR,
-                "Error logging in, please try again later",
+                "There was an error getting your timeslot",
             )
-        })?
-        .ok_or_else(|| {
+        })?;
+
+    timeslot.ok_or_else(|| {
+        eprintln!("Could not find timeslot by id");
+        AppError::new(StatusCode::NOT_FOUND, "not found")
+    })
+}
+
+pub async fn save_active_timeslot(
+    db: &DatabaseConnection,
+    timeslot: timeslots::ActiveModel,
+) -> Result<TimeslotModel, AppError> {
+    let timeslot = timeslot.save(db).await.map_err(|error| {
+        eprintln!("Error saving timeslot: {:?}", error);
+        AppError::new(StatusCode::INTERNAL_SERVER_ERROR, "Error saving timeslot")
+    })?;
+
+    convert_active_to_model(timeslot)
+}
+
+pub async fn get_all_timeslots(
+    db: &DatabaseConnection,
+    user_id: i32,
+    get_deleted: bool,
+) -> Result<Vec<TimeslotModel>, AppError> {
+    let mut query = Timeslots::find().filter(timeslots::Column::UserId.eq(Some(user_id)));
+
+    if !get_deleted {
+        query = query.filter(timeslots::Column::DeletedAt.is_null());
+    }
+
+    query.all(db).await.map_err(|error| {
+        eprintln!("Error getting all timeslots: {:?}", error);
+        AppError::new(StatusCode::INTERNAL_SERVER_ERROR, "Error getting all timeslots")
+    })
+}
+
+pub async fn get_default_timeslots(db: &DatabaseConnection) -> Result<Vec<TimeslotModel>, AppError> {
+    Timeslots::find()
+        .filter(timeslots::Column::IsDefault.eq(Some(true)))
+        .all(db)
+        .await
+        .map_err(|error| {
+            eprintln!("Error getting default timeslots: {:?}", error);
             AppError::new(
-                StatusCode::BAD_REQUEST,
-                "incorrect username and/or password",
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Error getting default timeslots",
             )
         })
 }
 
-fn convert_active_to_model(active_user: users::ActiveModel) -> Result<UserModel, AppError> {
-    active_user.try_into_model().map_err(|error| {
-        eprintln!("Error converting task active model to model: {:?}", error);
+fn convert_active_to_model(active_timeslot: timeslots::ActiveModel) -> Result<TimeslotModel, AppError> {
+    active_timeslot.try_into_model().map_err(|error| {
+        eprintln!("Error converting timeslot active model to model: {:?}", error);
         AppError::new(StatusCode::INTERNAL_SERVER_ERROR, "Internal server error")
     })
 }
